@@ -2,8 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import { IoSend } from "react-icons/io5";
 import { MdLogout } from "react-icons/md";
 
+// 1. Define types for message structures
+interface SystemMessage {
+  type: 'system';
+  content: string;
+  timestamp: string;
+}
+
+interface ChatMessage {
+  type: 'chat';
+  sender: string;
+  content: string;
+  timestamp: string;
+  isOwnMessage: boolean;
+}
+
+type Message = SystemMessage | ChatMessage;
+
 const App = () => {
-  const [messages, setMessages] = useState([]);
+  // 2. Type your state and refs
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const [userName, setUserName] = useState("");
@@ -12,12 +30,11 @@ const App = () => {
   const [currentRoom, setCurrentRoom] = useState("");
   const [currentUser, setCurrentUser] = useState("");
 
-  const wsRef = useRef();
-  const inputRef = useRef();
-  const messageEndRef = useRef();
+  const wsRef = useRef<WebSocket | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const messageEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    // Automatically scroll to the latest message
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
@@ -96,10 +113,14 @@ const App = () => {
       type: "chat",
       payload: { message: message, sender: currentUser },
     }));
-    inputRef.current.value = "";
+
+    if (inputRef.current) {
+        inputRef.current.value = "";
+    }
   };
 
-  const handleKeyPress = (e) => {
+  // 3. Type your event handlers
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       handleSendMessage();
     }
