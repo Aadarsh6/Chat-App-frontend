@@ -40,7 +40,16 @@ const App = () => {
 
   useEffect(() => {
     if (!hasJoinedRoom) return;
-    const ws = new WebSocket("ws://localhost:8080");
+  const wsUrl = import.meta.env.VITE_WEBSOCKET_URL;
+
+  if (!wsUrl) {
+  console.error("VITE_WEBSOCKET_URL environment variable is not set");
+  setConnectionStatus("Configuration Error");
+  return;
+  }
+
+const ws = new WebSocket(wsUrl);
+
     wsRef.current = ws;
 
     ws.onopen = () => {
