@@ -211,7 +211,7 @@ const ws = new WebSocket(wsUrl);
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(168,85,247,0.01),transparent_50%)] pointer-events-none"></div>
       
       {/* Header */}
-      <header className="relative bg-neutral-900/40 backdrop-blur-xl border-b border-neutral-800/30 p-6 z-10">
+      <header className="fix bg-neutral-900/40 backdrop-blur-xl border-b border-neutral-800/30 p-6 z-10">
         <div className="flex justify-between items-center">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
@@ -270,14 +270,15 @@ const ws = new WebSocket(wsUrl);
                   </div>
                 )}
                 
-                <div className={`relative px-5 py-4 rounded-3xl shadow-lg ${
-                  msg.isOwnMessage
-                    ? 'bg-gradient-to-br from-amber-500 to-orange-500 text-neutral-900 rounded-br-md shadow-amber-500/10'
-                    : 'bg-neutral-800/60 backdrop-blur-sm text-neutral-100 rounded-bl-md border border-neutral-700/30'
-                }`}>
-                  <p className="text-sm leading-relaxed break-words">{msg.content}</p>
-                  {msg.isOwnMessage && <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent rounded-3xl rounded-br-md pointer-events-none"></div>}
-                </div>
+               <div className={`relative px-5 py-4 rounded-3xl shadow-lg ${
+  msg.isOwnMessage
+    ? 'bg-gradient-to-br from-violet-600/80 to-blue-600/80 text-neutral-100 rounded-br-md shadow-amber-500/10'
+    : 'bg-gradient-to-br from-amber-500 to-orange-500  backdrop-blur-sm text-neutral-900 rounded-bl-md border border-violet-500/20 shadow-violet-500/10'
+}`}>
+  <p className="text-sm leading-relaxed break-words">{msg.content}</p>
+  {msg.isOwnMessage && <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent rounded-3xl rounded-br-md pointer-events-none"></div>}
+</div>
+
                 
                 <p className="text-xs text-neutral-500 mt-2 px-2 font-medium">{msg.timestamp}</p>
               </div>
