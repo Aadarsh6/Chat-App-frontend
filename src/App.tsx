@@ -7,6 +7,7 @@ interface SystemMessage {
   type: 'system';
   content: string;
   timestamp: string;
+  id: string;
 }
 
 interface ChatMessage {
@@ -15,15 +16,35 @@ interface ChatMessage {
   content: string;
   timestamp: string;
   isOwnMessage: boolean;
+  id: string;  
 }
 
 type Message = SystemMessage | ChatMessage;
+
+interface ConnectionState {
+  isConnected: boolean;
+  status: 'disconnected' | 'connecting' | 'connected' | 'error' | 'reconnecting';
+  reconnectAttempts: number;
+  lastError?: string;
+}
+
+
+const STORAGE_KEY = {
+  USER_DATA: 'chat_user_data',
+  MESSAGES: 'chat_messages_',
+  CONNECTION: 'chat_connection_state'
+}
 
 const App = () => {
   // 2. Type your state and refs
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState("disconnected");
+  const [connectionStatus, setConnectionStatus] = useState({
+    isConnected:  false,
+    status: "Disconnected",
+    lastError: null,
+    reconnectAttempt: 0,
+  });
   const [userName, setUserName] = useState("");
   const [roomId, setRoomId] = useState("");
   const [hasJoinedRoom, setHasJoinedRoom] = useState(false);
