@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IoSend } from "react-icons/io5";
 import { MdLogout } from "react-icons/md";
+import { preview } from "vite";
 
 // 1. Define types for message structures
 interface SystemMessage {
@@ -35,94 +36,227 @@ const STORAGE_KEY = {
   CONNECTION: 'chat_connection_state'
 }
 
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY = 2000;
+
 const App = () => {
   // 2. Type your state and refs
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState({
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionState>({
     isConnected:  false,
-    status: "Disconnected",
-    lastError: null,
-    reconnectAttempt: 0,
+    status: "disconnected",
+    reconnectAttempts: 0,
   });
   const [userName, setUserName] = useState("");
   const [roomId, setRoomId] = useState("");
   const [hasJoinedRoom, setHasJoinedRoom] = useState(false);
   const [currentRoom, setCurrentRoom] = useState("");
   const [currentUser, setCurrentUser] = useState("");
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [messageText, setMessageText] = useState("");
+
 
   const wsRef = useRef<WebSocket | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const reconnectTimeoutRef = useRef(null);
+  const isReconnectingRef = useRef(false);
 
   useEffect(() => {
+  
+    setMessageText('')
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
-    if (!hasJoinedRoom) return;
-  const wsUrl = import.meta.env.VITE_WEBSOCKET_URL;
+  useEffect(()=>{
+    loadeSavedData()
+  },[])
 
-  if (!wsUrl) {
-  console.error("VITE_WEBSOCKET_URL environment variable is not set");
-  setConnectionStatus("Configuration Error");
-  return;
+
+
+  useEffect(() => {
+    if (!hasJoinedRoom || !currentRoom || !currentUser) return;
+
+    connectWebSocket()
+
+    return ()=> {
+      cleanUp()
+    };
+  }, [hasJoinedRoom, currentRoom, currentUser]);
+
+
+  const loadeSavedData = () => {
+    try {
+      const savedUserData = localStorage.getItem(STORAGE_KEY.USER_DATA);
+      if(savedUserData){
+      const { userName: savedUserName, roomId: savedRoomId, currentUser: savedCurrentUser, currentRoom: savedCurrentRoom } = JSON.parse(savedUserData);
+
+      if(savedUserName && savedRoomId && savedCurrentUser && savedCurrentRoom){
+        setUserName(savedUserName);
+        setRoomId(savedRoomId);
+        setCurrentUser(savedCurrentUser);
+        setCurrentRoom(savedCurrentRoom);
+        setHasJoinedRoom(true)
+
+        const savedMessage =    localStorage.getItem(STORAGE_KEY.MESSAGES + savedCurrentRoom)
+        if(savedMessage){
+          setMessages(JSON.parse(savedMessage))
+        }
+      }
+      }
+    } catch (e) {
+      console.log("Error loading previous messages",e)
+      
+    }
   }
 
-const ws = new WebSocket(wsUrl);
 
+  const savedUserData = () => {
+    try {
+      const userdata = {userName, roomId, currentUser, currentRoom}
+        localStorage.setItem(STORAGE_KEY.USER_DATA, JSON.stringify(userdata))
+    } catch (error) {
+      console.log("Error saving user data", error)      
+    }
+  };
+
+
+  const saveMessages = () => {
+    try {
+      localStorage.setItem(STORAGE_KEY.MESSAGES + currentRoom, JSON.stringify(messages));
+    } catch (error) {
+      console.log("Error saving user Messages", error)
+    }
+  };
+
+  const clearSavedData = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY.USER_DATA)
+    } catch (error) {
+      console.log("Error removing user data", error)
+    }
+  };
+
+  const connectWebSocket = useCallback(()=>{
+
+    if(wsRef.current?.readyState === WebSocket.OPEN) return
+    setConnectionStatus(prev => ({...prev, status: "connecting"}))
+
+    const wsUrl = import.meta.env.VITE_WEBSOCKET_URL
+    const ws = new WebSocket(wsUrl)
     wsRef.current = ws;
 
-    ws.onopen = () => {
-      console.log("Connected to backend");
-      setIsConnected(true);
-      setConnectionStatus("Connected");
+    ws.onopen = ()=>{
+      console.log("connected to backend")
+      setConnectionStatus({
+        isConnected: true,
+        status: 'connected',
+        reconnectAttempts: 0
+      })
+      isReconnectingRef.current = false;
+
+      //?Join room
+
       ws.send(JSON.stringify({
         type: "join",
         payload: { roomId: currentRoom, userName: currentUser },
       }));
-    };
+    }
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === "system") {
-          setMessages((m) => [...m, {
-            type: "system",
-            content: data.message,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          }]);
-        } else if (data.type === "chat") {
-          setMessages((m) => [...m, {
-            type: "chat",
-            sender: data.sender,
-            content: data.message,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            isOwnMessage: data.sender === currentUser,
-          }]);
-        }
+        handleWebSocketMessage(data);
       } catch (error) {
-        console.error("Error parsing message data:", error);
+        console.log("Error parsing data", error)
       }
-    };
+    }
 
-    ws.onclose = () => {
-      console.log("WebSocket connection closed");
-      setIsConnected(false);
-      setConnectionStatus("Disconnected");
-    };
+    ws.onclose = (event)=>{
+      console.log("WebSocket connection closed", event.code, event.reason);
+      setConnectionStatus(prev=> ({...prev,
+        isConnected: false,
+        status: "disconnected"
+      }));
+
+
+      //! Attempt reconnection if not intentional disconnect
+      if(event.code !== 1000 && !isReconnectingRef.current && hasJoinedRoom){
+        attemptReconnect()
+      }
+    }
 
     ws.onerror = (error) => {
-      console.log("Websocket error: ", error);
-      setConnectionStatus("Error");
+      console.log("WebSocket error: ", error);
+      setConnectionStatus(prev => ({
+        ...prev,
+        status: 'error',
+        lastError: 'Connection failed'
+      }));
     };
+  }, [currentRoom, currentUser, hasJoinedRoom]);
 
-    return () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close();
+  const handleWebSocketMessage = (data:any) => {
+    const timestamp = new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit'});
+    const messageId = Date.now().toString() + Math.random().toString(36).substring(2,9)
+
+    if(data.type === 'system'){
+      setMessages(prev => [...prev, {
+        type: "system",
+        content: data.message,
+        timestamp,
+        id: messageId,
+      }]);
+    }else if(data.type === "chat"){
+      setMessages(prev => [...prev, {
+        type: "chat",
+        sender: data.sender,
+        content: data.message,
+        timestamp,
+        isOwnMessage: data.sender === currentUser,
+        id: messageId
+      }]);
+    }else if( data.type === "users"){
+      setOnlineUsers(data.users || [])
+    }
+  };
+
+
+  const attemptReconnect = useCallback(()=>{
+    if(isReconnectingRef.current) return;
+//@ts-ignore
+    setConnectionStatus(prev => {
+      if(prev.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS){
+        return {...prev, status: 'error', lastError: "Max reconnecting attempt exceeded"}
       }
-    };
-  }, [hasJoinedRoom, currentRoom, currentUser]);
+      isReconnectingRef.current = true;
+      const newAttempts = prev.reconnectAttempts
+//@ts-ignore
+      reconnectTimeoutRef.current = setTimeout(()=>{
+        console.log(`Reconnection attempt ${newAttempts}`);
+        connectWebSocket()
+      }, RECONNECT_DELAY * newAttempts)
+
+      return{
+        ...prev,
+        status:"reconnecting",
+        reconnectAttempts: newAttempts
+      }
+    })
+  },[connectWebSocket]);
+
+
+  const cleanUp = () => { 
+
+    if(reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+    if(wsRef.current){
+      isReconnectingRef.current = true;
+      wsRef.current.close(1000, 'Component Unmounting')
+    }
+}
+
 
   const handleJoinRoom = () => {
     if (!userName.trim() || !roomId.trim()) {
@@ -132,11 +266,15 @@ const ws = new WebSocket(wsUrl);
     setCurrentUser(userName.trim());
     setCurrentRoom(roomId.trim());
     setHasJoinedRoom(true);
-    setMessages([]);
+
+    setTimeout(() => {
+      saveMessages()
+    }, 100);
+
   };
 
   const handleSendMessage = () => {
-    const message = inputRef.current?.value?.trim();
+    const message = messageText.trim()
     if (!message || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
     wsRef.current.send(JSON.stringify({
@@ -144,9 +282,7 @@ const ws = new WebSocket(wsUrl);
       payload: { message: message, sender: currentUser },
     }));
 
-    if (inputRef.current) {
-        inputRef.current.value = "";
-    }
+    setMessageText('')
   };
 
   // 3. Type your event handlers
@@ -157,6 +293,8 @@ const ws = new WebSocket(wsUrl);
   };
 
   const handleLeaveRoom = () => {
+    cleanUp()
+    clearSavedData()
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.close();
     }
@@ -166,7 +304,21 @@ const ws = new WebSocket(wsUrl);
     setCurrentUser("");
     setUserName("");
     setRoomId("");
+    setOnlineUsers([]);
+    setConnectionStatus({
+      isConnected: false,
+      status: "disconnected",
+      reconnectAttempts: 0
+    })
   };
+
+  const handleManualReconnect = () => {
+    setConnectionStatus(prev => ({...prev, reconnectAttempts: 0}));
+    isReconnectingRef.current = false;
+    connectWebSocket()
+  }
+
+  
 
   // Join Screen
   if (!hasJoinedRoom) {
