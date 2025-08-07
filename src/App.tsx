@@ -231,7 +231,7 @@ const App = () => {
                 <HiUsers className="w-4 h-4 text-amber-400" />
               </div>
               <h1 className="text-xl lg:text-2xl font-bold text-white truncate tracking-tight">
-                {currentRoom}
+                {`Room ${currentRoom}`}
               </h1>
             </div>
             <p className="text-sm lg:text-base text-neutral-400 truncate ml-11">
