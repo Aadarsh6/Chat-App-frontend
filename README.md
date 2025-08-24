@@ -2,8 +2,6 @@
 
 A modern, responsive, and beautifully designed frontend for a real-time chat application. Built with React and styled with Tailwind CSS, this project provides a premium user experience for joining chat rooms and conversing with others.
 
-![Chat App Demo](./demo.png)
-*(Note: You can replace `demo.png` with a screenshot of your application)*
 
 ## 📋 About The Project
 
