@@ -247,7 +247,7 @@ const App = () => {
             }`}>
               {isConnected ? <MdWifi className="w-4 h-4" /> : <MdWifiOff className="w-4 h-4" />}
               <span className="text-sm font-medium hidden sm:inline">{connectionStatus}</span>
-             
+             {!isConnected ? <span className="inline-block border-2 border-t-transparent w-4 h-4 text-red-400 rounded-full animate-spin"></span> : ""}
             </div>
             
             <button 
