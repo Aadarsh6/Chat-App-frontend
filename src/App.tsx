@@ -23,7 +23,7 @@ type Message = SystemMessage | ChatMessage;
 const App = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState("disconnected");
+  const [connectionStatus, setConnectionStatus] = useState("connecting...");
   const [userName, setUserName] = useState("");
   const [roomId, setRoomId] = useState("");
   const [hasJoinedRoom, setHasJoinedRoom] = useState(false);
@@ -247,6 +247,7 @@ const App = () => {
             }`}>
               {isConnected ? <MdWifi className="w-4 h-4" /> : <MdWifiOff className="w-4 h-4" />}
               <span className="text-sm font-medium hidden sm:inline">{connectionStatus}</span>
+             
             </div>
             
             <button 
